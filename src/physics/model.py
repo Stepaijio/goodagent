@@ -15,7 +15,9 @@ class KapitzaModel:
         self.x = np.linspace(0, L, Nx)
         
         # Initialize h with random perturbation
-        self.h = h0 + np.random.uniform(-delta, delta, Nx)
+        # self.h = h0 + np.random.uniform(-delta, delta, Nx)
+        # Initialize h with a sine wave for controlled instability growth (2 periods across L)
+        self.h = h0 + delta * np.sin(2 * np.pi * self.x / (self.L / 10)) + np.random.uniform(-delta / 4, delta / 4, Nx)
         self.h[0] = h0  # Inlet boundary condition
 
     def compute_q(self):
