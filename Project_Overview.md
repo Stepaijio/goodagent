@@ -14,6 +14,7 @@
 
 ## Документация проекта
 - Общая информация: `Project_Overview.md`
+- Структура реализации: `Project_Structure.md`
 - Ход работы и решения: `Diploma_Worklog.md`
 - Спецификация физической модели: `Physical_Model.md`
 
