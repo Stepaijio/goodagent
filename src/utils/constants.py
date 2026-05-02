@@ -12,7 +12,7 @@ DEFAULT_PARAMS = {
     "h0": 0.001,            # Average film thickness [m] (1 mm)
     "L": 0.5,               # Wall height [m]
     "T": 10.0,              # Total observation time [s]
-    "delta": 1e-5,          # Initial perturbation amplitude [m]
+    "delta": 3 * 1e-5,          # Initial perturbation amplitude [m]
     "Nx": 100,              # Number of spatial points
     "dt": 1e-6,             # Time step [s] (Needs to be very small for stability)
 }

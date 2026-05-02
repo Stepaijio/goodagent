@@ -35,7 +35,7 @@ def animate_film():
         line.set_ydata(model.get_h())
         return line,
 
-    ani = FuncAnimation(fig, update, frames=200, interval=20, blit=True)
+    ani = FuncAnimation(fig, update, frames=800, interval=20, blit=True)
     writer = PillowWriter(fps=25)
     ani.save("animation.gif", writer=writer)
 
