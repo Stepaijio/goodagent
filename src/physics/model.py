@@ -10,7 +10,7 @@ class KapitzaModel:
         self.L = L
         self.Nx = Nx
         self.delta = delta
-        self.alpha = 0.965  # Balance between Central (1.0) and Upwind (0.0) for grav flux
+        self.alpha = 0.96  # Balance between Central (1.0) and Upwind (0.0) for grav flux
         
         self.dx = L / (Nx - 1)
         self.x = np.linspace(0, L, Nx)
