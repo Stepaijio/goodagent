@@ -5,6 +5,7 @@ import pandas as pd
 from catboost import CatBoostRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 # Configuration
@@ -41,10 +42,18 @@ def load_all_data():
                 k = k_vals[i]
                 # Each sensor is an independent training example
                 for s in range(k):
-                    # Feature vector: [rho, sigma, h_1, ..., h_100]
+                    # 1. Extract raw readings
+                    h_series = readings[i, s, :]
+                    h_mean = np.mean(h_series)
+                    
+                    # 2. Relative normalization: (h - h_mean) / (h_mean + eps)
+                    # This forces the model to focus on wave dynamics rather than absolute thickness
+                    h_norm = (h_series - h_mean) / (h_mean + 1e-7)
+                    
+                    # Feature vector: [rho, sigma, h_norm_1, ..., h_norm_100]
                     feature_vector = np.concatenate([
                         [rho[i], sigma[i]], 
-                        readings[i, s, :]
+                        h_norm
                     ])
                     all_features.append(feature_vector)
                     
@@ -63,6 +72,12 @@ def train_and_evaluate(X, y, target_name):
     X_train, X_val, y_train, y_val = train_test_split(
         X_train_val, y_train_val, test_size=VAL_SPLIT/(TRAIN_SPLIT+VAL_SPLIT), random_state=42, shuffle=True
     )
+
+    # Normalize features (especially rho and sigma)
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_val = scaler.transform(X_val)
+    X_test = scaler.transform(X_test)
     
     print(f"\nTraining model for {target_name}...")
     model = CatBoostRegressor(
