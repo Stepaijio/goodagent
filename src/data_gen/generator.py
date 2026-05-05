@@ -9,7 +9,7 @@ from src.utils.constants import G
 # Configuration
 TOTAL_EXAMPLES = 100_000
 EXAMPLES_PER_SHARD = 10_000
-BATCH_SIZE = 500  # Number of examples a worker generates per task
+BATCH_SIZE = 10  # Number of examples a worker generates per task
 DATA_DIR = "data"
 SHARD_PREFIX = "data_shard"
 
