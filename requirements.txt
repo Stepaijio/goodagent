@@ -6,3 +6,5 @@ torch
 numba
 h5py
 tqdm
+catboost
+scikit-learn
