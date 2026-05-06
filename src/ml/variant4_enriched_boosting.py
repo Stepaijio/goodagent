@@ -167,6 +167,10 @@ def main():
     # 2. Train Model for Viscosity (log-space)
     model_mu = train_and_evaluate(X, y_mu, "Log-Viscosity (log10(mu))")
     
+    # Save the best model for ensemble use
+    model_mu.save_model("best_model_v4.pth")
+    print("Model saved to best_model_v4.pth")
+    
     print("\n" + "="*40)
     print("Variant 4 (Enriched Boosting - Phase 1) Complete")
     print("="*40)

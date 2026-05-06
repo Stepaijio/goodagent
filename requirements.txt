@@ -8,3 +8,4 @@ h5py
 tqdm
 catboost
 scikit-learn
+xgboost
