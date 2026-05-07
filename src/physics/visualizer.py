@@ -24,9 +24,9 @@ def animate_film():
     line, = ax.plot(model.x, model.get_h(), color='blue')
     ax.set_xlim(0, params["L"])
     ax.set_ylim(params["h0"] * 0.5, params["h0"] * 1.5)
-    ax.set_xlabel("Position x [m]")
-    ax.set_ylabel("Thickness h [m]")
-    ax.set_title("Kapitza Waves Simulation")
+    ax.set_xlabel("Позиция x (м)")
+    ax.set_ylabel("Толщина h (м)")
+    ax.set_title("Симуляция волн Капицы")
     ax.grid(True)
 
     def update(frame):
