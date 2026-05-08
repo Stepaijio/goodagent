@@ -21,10 +21,5 @@
 14. Prokhorenkova O., Gusev G., Vorobev A., Dorogushkin A. CatBoost: unbiased boosting with categorical features // Advances in Neural Information Processing Systems (NeurIPS), 2018.
 15. Breiman L. Random Forests // Machine Learning, 2001. V. 45. P. 5–32.
 16. Vaswani A., Shazeer N., Parmar N., Uszkoreit J., Jones L., Gomez A. N., Kaiser L. Attention is all you need // Advances in Neural Information Processing Systems (NeurIPS), 2017.
-## Машинное обучение и анализ данных
-13. Chen T., Guestrin C. XGBoost: A Scalable Tree Boosting System // Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 2016. P. 785–794.
-14. Prokhorenkova O., Gusev G., Vorobev A., Dorogushkin A. CatBoost: unbiased boosting with categorical features // Advances in Neural Information Processing Systems (NeurIPS), 2018.
-15. Breiman L. Random Forests // Machine Learning, 2001. V. 45. P. 5–32.
-16. Vaswani A., Shazeer N., Parmar N., Uszkoreit J., Jones L., Gomez A. N., Kaiser L. Attention is all you need // Advances in Neural Information Processing Systems (NeurIPS), 2017.
 17. Cooley J. W., Tukey J. W. An algorithm for the machine calculation of complex Fourier series // Mathematics of Computation, 1965. V. 19. P. 297-301.
 18. Prokudina L. A., et al. Experimental study of the wave flow of a liquid film using laser-induced fluorescence // Journal of Physics: Conference Series, 2015.
