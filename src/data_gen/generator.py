@@ -31,7 +31,7 @@ def sample_log_uniform(low, high):
     return 10**np.random.uniform(np.log10(low), np.log10(high))
 
 def get_physical_properties(T, C):
-    \"\"\"Calculate rho, mu, sigma based on Temperature and Concentration of Glycerin.\"\"\"
+    """Calculate rho, mu, sigma based on Temperature and Concentration of Glycerin."""
     # Density: linear interpolation between water (1000) and glycerin (1260)
     rho = 1000 + 260 * C
     
@@ -47,7 +47,7 @@ def get_physical_properties(T, C):
     return rho, mu, sigma
 
 def generate_batch(batch_size):
-    \"\"\"Generates a batch of valid examples.\"\"\"
+    """Generates a batch of valid examples."""
     batch_features = []
     batch_labels = []
     
@@ -61,7 +61,7 @@ def generate_batch(batch_size):
         h0 = sample_log_uniform(*H0_RANGE)
         epsilon = np.random.uniform(*EPSILON_RANGE)
         delta = epsilon * h0
-        t_sim = np.random.uniform(*T_SIM_//RANGE)
+        t_sim = np.random.uniform(*T_SIM_RANGE)
         
         # Re check: Re = (rho^2 * g * h0^3) / (3 * mu^2)
         # G is imported from src.utils.constants

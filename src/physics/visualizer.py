@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.animation import PillowWriter
 from src.physics.model import KapitzaModel
-from src.utils.constants import DEFAULT_PARAMS
+from src.utils.constants import DEFAULT_PARAMS_4
 
 def animate_film():
-    params = DEFAULT_PARAMS
+    params = DEFAULT_PARAMS_4
     model = KapitzaModel(
         rho=params["rho"],
         mu=params["mu"],
@@ -18,7 +18,7 @@ def animate_film():
     )
     
     dt = params["dt"]
-    steps_per_frame = 100  # Speed up animation by doing multiple steps per frame
+    steps_per_frame = 10000  # Speed up animation by doing multiple steps per frame
     
     fig, ax = plt.subplots()
     line, = ax.plot(model.x, model.get_h(), color='blue')
@@ -35,7 +35,7 @@ def animate_film():
         line.set_ydata(model.get_h())
         return line,
 
-    ani = FuncAnimation(fig, update, frames=800, interval=20, blit=True)
+    ani = FuncAnimation(fig, update, frames=100, interval=20, blit=True)
     writer = PillowWriter(fps=25)
     ani.save("animation.gif", writer=writer)
 
