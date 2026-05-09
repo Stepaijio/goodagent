@@ -14,10 +14,9 @@ DATA_DIR = "data"
 SHARD_PREFIX = "data_shard"
 
 # Physical Parameter Ranges
-MU_RANGE = (0.001, 1.0)
-H0_RANGE = (0.0002, 0.002)
-RHO_RANGE = (800, 1200)
-SIGMA_RANGE = (0.02, 0.08)
+T_RANGE = (20, 80)
+C_RANGE = (0.3, 0.8)
+H0_RANGE = (0.001, 0.01)
 EPSILON_RANGE = (0.001, 0.05)
 L = 0.5
 SENSOR_X_RANGE = (0.05, 0.45)
@@ -31,22 +30,45 @@ def sample_log_uniform(low, high):
     """Sample from a log-uniform distribution."""
     return 10**np.random.uniform(np.log10(low), np.log10(high))
 
+def get_physical_properties(T, C):
+    \"\"\"Calculate rho, mu, sigma based on Temperature and Concentration of Glycerin.\"\"\"
+    # Density: linear interpolation between water (1000) and glycerin (1260)
+    rho = 1000 + 260 * C
+    
+    # Surface tension: linear interpolation between water (0.072) and glycerin (0.063)
+    sigma = 0.072 - 0.009 * C
+    
+    # Viscosity: empirical approximation
+    # mu_20 is viscosity at 20C: log10(mu) = -3 + 3*C
+    mu_20 = 10**(-3 + 3 * C)
+    # Temperature correction: mu(T) = mu_20 * exp(-0.02 * (T - 20))
+    mu = mu_20 * np.exp(-0.02 * (T - 20))
+    
+    return rho, mu, sigma
+
 def generate_batch(batch_size):
-    """Generates a batch of valid examples."""
+    \"\"\"Generates a batch of valid examples.\"\"\"
     batch_features = []
     batch_labels = []
     
     count = 0
     while count < batch_size:
         # --- Sampling ---
-        mu = sample_log_uniform(*MU_RANGE)
+        T = np.random.uniform(*T_RANGE)
+        C = np.random.uniform(*C_RANGE)
+        rho, mu, sigma = get_physical_properties(T, C)
+        
         h0 = sample_log_uniform(*H0_RANGE)
-        rho = np.random.uniform(*RHO_RANGE)
-        sigma = np.random.uniform(*SIGMA_RANGE)
         epsilon = np.random.uniform(*EPSILON_RANGE)
         delta = epsilon * h0
-        t_sim = np.random.uniform(*T_SIM_RANGE)
+        t_sim = np.random.uniform(*T_SIM_//RANGE)
         
+        # Re check: Re = (rho^2 * g * h0^3) / (3 * mu^2)
+        # G is imported from src.utils.constants
+        re = (rho**2 * G * h0**3) / (3 * mu**2)
+        if re > 50:
+            continue
+            
         k = np.random.randint(SENSOR_COUNT_RANGE[0], SENSOR_COUNT_RANGE[1] + 1)
         x_sensors = np.sort(np.random.uniform(SENSOR_X_RANGE[0], SENSOR_X_RANGE[1], k))
         
@@ -56,12 +78,9 @@ def generate_batch(batch_size):
         model = KapitzaModel(rho, mu, sigma, h0, L, nx, delta)
         
         # We need to record data during the last T_WINDOW.
-        # Total steps = t_sim / dt
-        # Start recording at (t_sim - T_WINDOW) / dt
         start_recording_step = int((t_sim - T_WINDOW) / dt)
         total_steps = int(t_sim / dt)
         
-        # Arrays to hold sensor readings: [k, SAMPLES_PER_WINDOW]
         readings = np.zeros((k, SAMPLES_PER_WINDOW))
         
         is_stable = True
@@ -69,26 +88,17 @@ def generate_batch(batch_size):
             model.step(dt)
             h = model.get_h()
             
-            # Check stability
             if np.any(np.isnan(h)) or np.any(np.isinf(h)) or np.max(h) > 10 * h0:
                 is_stable = False
                 break
             
-            # Record if in window and at the correct sample interval
-            # Sample interval is DT_SENS = 0.001. dt is 1e-6. 
-            # So every 1000 steps.
             if step >= start_recording_step:
                 relative_step = step - start_recording_step
                 sample_idx = relative_step // int(DT_SENS / dt)
                 if sample_idx < SAMPLES_PER_WINDOW:
-                    # Get values at sensor positions (interpolation)
-                    # model.x is the grid. x_sensors are the points.
                     readings[:, sample_idx] = np.interp(x_sensors, model.x, h)
         
         if is_stable:
-            # Features: [rho, sigma, sensor_configs]
-            # Since k varies, we store them as a list or a padded array.
-            # For HDF5, we will store coordinates and readings separately.
             features = {
                 'rho': rho,
                 'sigma': sigma,
@@ -102,6 +112,7 @@ def generate_batch(batch_size):
             count += 1
             
     return batch_features, batch_labels
+
 
 def generate_dataset():
     if not os.path.exists(DATA_DIR):
