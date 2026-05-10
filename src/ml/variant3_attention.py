@@ -10,13 +10,14 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
+from src.ml.plotting_utils import plot_scatter, plot_residuals, plot_r2_vs_k
 
 # Configuration
 DATA_DIR = "C:/Users/UserSK/Desktop/goodagent/data"
 SHARD_PREFIX = "data_shard"
 BATCH_SIZE = 64
 LEARNING_RATE = 1e-3 
-EPOCHS = 100
+EPOCHS = 10
 TRAIN_SPLIT = 0.8
 VAL_SPLIT = 0.1
 TEST_SPLIT = 0.1
@@ -58,16 +59,28 @@ class TemporalEncoder(nn.Module):
     """Processes a single sensor time series using a 1D-CNN for stability."""
     def __init__(self, input_dim=1, d_model=32):
         super(TemporalEncoder, self).__init__()
+        # Временно убрали BatchNorm и Dropout для отладки
         self.net = nn.Sequential(
             nn.Conv1d(input_dim, 16, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm1d(16),
             nn.ReLU(),
-            nn.MaxPool1d(2), # 100 -> 50
+            nn.MaxPool1d(2),
             
             nn.Conv1d(16, 32, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm1d(32),
             nn.ReLU(),
-            nn.AdaptiveAvgPool1d(1) # 50 -> 1
+            nn.AdaptiveAvgPool1d(1)
+        )
+        
+    def forward(self, x):
+        x = x.unsqueeze(1)
+        x = self.net(x)
+        return x.squeeze(-1)
+
+# ... и в Variant3Model:
+        self.mlp = nn.Sequential(
+            nn.Linear(self.spat_dim + 2, 64),
+            nn.ReLU(),
+            # nn.Dropout(0.3), # Закомментировали
+            nn.Linear(64, 1)
         )
         
     def forward(self, x):
@@ -115,7 +128,7 @@ class Variant3Model(nn.Module):
             nn.Linear(64, 1)
         )
 
-    def forward(self, rho, sigma, k, x, h):
+    def forward(self, rho, sigma, k, x, h, k_eval=None):
         batch_size = h.shape[0]
         k_max = h.shape[1]
         
@@ -123,7 +136,13 @@ class Variant3Model(nn.Module):
         v = self.temporal_encoder(h_reshaped) # [batch * k_max, temp_dim]
         v = v.view(batch_size, k_max, -1) # [batch, k_max, temp_dim]
         
-        k_mask = torch.arange(k_max).to(DEVICE).unsqueeze(0) < k.unsqueeze(1)
+        # Correct masking for R2 vs k
+        if k_eval is not None:
+            limit = torch.min(k, torch.tensor(k_eval).to(DEVICE))
+        else:
+            limit = k
+            
+        k_mask = torch.arange(k_max).to(DEVICE).unsqueeze(0) < limit.unsqueeze(1)
         v_global = self.spatial_encoder(v, x, k_mask) # [batch, spat_dim]
         
         constants = torch.stack([rho, sigma], dim=-1) # [batch, 2]
@@ -155,9 +174,29 @@ def main():
     rho_norm = scaler_rho.transform(rho.reshape(-1, 1)).flatten()
     sigma_norm = scaler_sigma.transform(sigma.reshape(-1, 1)).flatten()
     
+    # 1. Split
+    # 1. Split
+    y_mu = np.log10(labels[:, 0])
+    
+    # ПРОВЕРКА СТАТИСТИКИ (до сплита)
+    print(f"Total dataset y mean: {y_mu.mean():.6f}, std: {y_mu.std():.6f}")
+
     indices = np.arange(len(rho))
-    train_idx, test_idx = train_test_split(indices, test_size=TEST_SPLIT, random_state=42)
-    train_idx, val_idx = train_test_split(train_idx, test_size=VAL_SPLIT/(TRAIN_SPLIT+VAL_SPLIT), random_state=42)
+    # Используем shuffle=True (по умолчанию) и фиксированный random_state
+    train_idx, test_idx = train_test_split(indices, test_size=TEST_SPLIT, random_state=42, shuffle=True)
+    train_idx, val_idx = train_test_split(train_idx, test_size=VAL_SPLIT/(TRAIN_SPLIT+VAL_SPLIT), random_state=42, shuffle=True)
+    
+    # ПРОВЕРКА СТАТИСТИКИ (после сплита)
+    print(f"Train y mean: {y_mu[train_idx].mean():.6f}, std: {y_mu[train_idx].std():.6f}")
+    print(f"Val y mean: {y_mu[val_idx].mean():.6f}, std: {y_mu[val_idx].std():.6f}")
+    
+    # 2. Fit Scaler ONLY on Training data
+    scaler_rho = StandardScaler().fit(rho[train_idx].reshape(-1, 1))
+    scaler_sigma = StandardScaler().fit(sigma[train_idx].reshape(-1, 1))
+    
+    # 3. Transform all data
+    rho_norm = scaler_rho.transform(rho.reshape(-1, 1)).flatten()
+    sigma_norm = scaler_sigma.transform(sigma.reshape(-1, 1)).flatten()
     
     def create_ds(idx):
         return KapitzaDataset(rho_norm[idx], sigma_norm[idx], y_mu[idx], k_vals[idx], x_sensors[idx], readings[idx])
@@ -168,8 +207,8 @@ def main():
     
     model = Variant3Model().to(DEVICE)
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-3)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+    optimizer = optim.Adam(model.parameters(), lr=5e-4, weight_decay=1e-3)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     
     best_val_loss = float('inf')
     train_losses, val_losses = [], []
@@ -222,12 +261,40 @@ def main():
             all_targets.append(y.cpu().numpy().flatten())
             
     all_preds, all_targets = np.concatenate(all_preds), np.concatenate(all_targets)
+    
+    mae = mean_absolute_error(all_targets, all_preds)
+    r2 = r2_score(all_targets, all_preds)
+    
     print("\n" + "="*40)
     print(f"Variant 3 (Attention) Evaluation:")
     print(f"  - Target: Log10(Viscosity)")
-    print(f"  - MAE: {mean_absolute_error(all_targets, all_preds):.6f}")
-    print(f"  - R2 Score: {r2_score(all_targets, all_preds):.4f}")
+    print(f"  - MAE: {mae:.6f}")
+    print(f"  - R2 Score: {r2:.4f}")
     print("="*40)
+    
+    plot_scatter(all_targets, all_preds, "Scatter Plot: Variant 3", "scatter_v3.png")
+    plot_residuals(all_targets, all_preds, "Residuals: Variant 3", "residuals_v3.png")
+    
+    # Actual R2 vs k calculation
+    k_range = np.arange(1, 11)
+    r2_vs_k = []
+    
+    with torch.no_grad():
+        for k_eval in k_range:
+            temp_preds = []
+            temp_targets = []
+            for batch in test_loader:
+                rho, sigma, k, x, h, y = batch['rho'].to(DEVICE), batch['sigma'].to(DEVICE), batch['k'].to(DEVICE), batch['x'].to(DEVICE), batch['h'].to(DEVICE), batch['y'].to(DEVICE)
+                
+                # Pass ACTUAL k and k_eval for correct masking
+                preds = model(rho, sigma, k, x, h, k_eval=k_eval)
+                temp_preds.append(preds.cpu().numpy().flatten())
+                temp_targets.append(y.cpu().numpy().flatten())
+            
+            r2_val = r2_score(np.concatenate(temp_targets), np.concatenate(temp_preds))
+            r2_vs_k.append(r2_val)
+            
+    plot_r2_vs_k(k_range, np.array(r2_vs_k), "R2 vs k: Variant 3", "r2_vs_k_v3.png")
 
 if __name__ == "__main__":
     main()

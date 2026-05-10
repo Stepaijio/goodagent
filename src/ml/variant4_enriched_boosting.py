@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
+from src.ml.plotting_utils import plot_scatter, plot_residuals, plot_r2_vs_k
 
 # Configuration
 DATA_DIR = "C:/Users/UserSK/Desktop/goodagent/data"
@@ -85,72 +86,112 @@ def extract_enriched_features(h_series, rho, sigma, prev_h_series=None):
 
 def load_all_data():
     """
-    Loads all examples from HDF5 shards and transforms them into 
-    an enriched feature set for Independent Boosting.
+    Loads all examples from HDF5 shards.
+    Returns:
+    - features: [num_examples, k_max, feature_dim]
+    - mu_targets: [num_examples]
+    - k_vals: [num_examples]
     """
     shards = sorted([f for f in os.listdir(DATA_DIR) if f.startswith(SHARD_PREFIX) and f.endswith(".h5")])
     
     all_features = []
     all_mu_targets = []
+    all_k_vals = []
     
     print(f"Loading and enriching data from {len(shards)} shards...")
     for shard in tqdm(shards):
         with h5py.File(os.path.join(DATA_DIR, shard), 'r') as f:
             rho = f['rho'][:]
             sigma = f['sigma'][:]
-            labels = f['labels'][:] # [mu, h_final]
+            labels = f['labels'][:]
             k_vals = f['k'][:]
             readings = f['readings'][:]
             
             num_examples = rho.shape[0]
             for i in range(num_examples):
                 k = k_vals[i]
-                # Each sensor is an independent training example, 
-                # but we now consider the sequence to extract spatial features.
+                example_features = []
                 prev_h = None
-                for s in range(k):
-                    current_h = readings[i, s, :]
-                    feat = extract_enriched_features(current_h, rho[i], sigma[i], prev_h_series=prev_h)
-                    all_features.append(feat)
-                    
-                    # Target mu in log-space
-                    all_mu_targets.append(np.log10(labels[i, 0]))
-                    
-                    # Store current for next sensor's spatial analysis
-                    prev_h = current_h
-                    
-    return np.array(all_features), np.array(all_mu_targets)
+                for s in range(10): # k_max = 10
+                    if s < k:
+                        current_h = readings[i, s, :]
+                        feat = extract_enriched_features(current_h, rho[i], sigma[i], prev_h_series=prev_h)
+                        prev_h = current_h
+                    else:
+                        feat = np.zeros(115) # [rho, sigma] + 100 + 3 + 3 + 3 + 3? No, let's check extract_enriched_features
+                        # [rho, sigma](2) + h_norm(100) + FFT(3) + Stats(3) + Dyn(3) + Spatial(3) = 114?
+                        # Let's check: 2 + 100 + 3 + 3 + 3 + 3 = 114. 
+                        # Wait, in extract_enriched_features: 
+                        # [rho, sigma](2) + h_norm(100) + [dom_freq, spectral_energy, peak_amp, amplitude, variance, std_dev](6) 
+                        # + [mean_abs_vel, max_abs_vel, diff_var](3) + spatial_features(3) = 2 + 100 + 6 + 3 + 3 = 114.
+                        feat = np.zeros(114)
+                    example_features.append(feat)
+                
+                all_features.append(example_features)
+                all_mu_targets.append(np.log10(labels[i, 0]))
+                all_k_vals.append(k)
+                
+    return np.array(all_features), np.array(all_mu_targets), np.array(all_k_vals)
 
-def train_and_evaluate(X, y, target_name):
-    """Helper to train CatBoost and print metrics."""
-    # Split data
-    X_train_val, X_test, y_train_val, y_test = train_test_split(
-        X, y, test_size=TEST_SPLIT, random_state=42, shuffle=True
-    )
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_train_val, y_train_val, test_size=VAL_SPLIT/(TRAIN_SPLIT+VAL_SPLIT), random_state=42, shuffle=True
-    )
+def train_and_evaluate(X_grouped, y, k_vals, target_name):
+    """
+    X_grouped: [num_examples, k_max, feat_dim]
+    """
+    indices = np.arange(len(X_grouped))
+    train_val_idx, test_idx = train_test_split(indices, test_size=TEST_SPLIT, random_state=42)
+    train_idx, val_idx = train_test_split(train_val_idx, test_size=VAL_SPLIT/(TRAIN_SPLIT+VAL_SPLIT), random_state=42)
+    
+    def flatten_active(idx_list):
+        feat_flat, target_flat = [], []
+        for idx in idx_list:
+            k = k_vals[idx]
+            feat_flat.append(X_grouped[idx, :k])
+            target_flat.append([y[idx]] * k)
+        return np.vstack([np.vstack(x) for x in feat_flat]), np.concatenate(target_flat)
+
+    X_train_raw, y_train = flatten_active(train_idx)
+    X_val_raw, y_val = flatten_active(val_idx)
+    X_test_raw, y_test_flat = flatten_active(test_idx)
+    
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train_raw)
+    X_val = scaler.transform(X_val_raw)
+    X_test = scaler.transform(X_test_raw)
     
     print(f"\nTraining model for {target_name}...")
     model = CatBoostRegressor(
-        iterations=1000,
-        learning_rate=0.05,
-        depth=6,
-        loss_function='RMSE',
-        verbose=False,
-        random_seed=42
+        iterations=1000, learning_rate=0.05, depth=6, loss_function='RMSE', verbose=False, random_seed=42
     )
-    
     model.fit(X_train, y_train, eval_set=(X_val, y_val), early_stopping_rounds=50)
     
-    # Predict and evaluate
-    preds = model.predict(X_test)
-    mae = mean_absolute_error(y_test, preds)
-    r2 = r2_score(y_test, preds)
+    y_test_grouped = y[test_idx]
+    all_preds_flat = model.predict(X_test)
+    
+    test_k_vals = k_vals[test_idx]
+    example_preds = []
+    start_idx = 0
+    for k in test_k_vals:
+        example_preds.append(all_preds_flat[start_idx : start_idx + k])
+        start_idx += k
+        
+    k_range = np.arange(1, 11)
+    r2_vs_k = []
+    for k_eval in k_range:
+        k_avg_preds = [np.mean(p[:k_eval]) for p in example_preds]
+        r2_vs_k.append(r2_score(y_test_grouped, np.array(k_avg_preds)))
+        
+    final_preds = [np.mean(p) for p in example_preds]
+    final_r2 = r2_score(y_test_grouped, np.array(final_preds))
+    mae = mean_absolute_error(y_test_grouped, np.array(final_preds))
     
     print(f"Results for {target_name}:")
     print(f"  - MAE: {mae:.6f}")
-    print(f"  - R2 Score: {r2:.4f}")
+    print(f"  - R2 Score: {final_r2:.4f}")
+    
+    if "Log-Viscosity" in target_name:
+        plot_scatter(y_test_grouped, np.array(final_preds), f"Scatter Plot: {target_name} (V4)", "scatter_v4.png")
+        plot_residuals(y_test_grouped, np.array(final_preds), f"Residuals: {target_name} (V4)", "residuals_v4.png")
+        plot_r2_vs_k(k_range, np.array(r2_vs_k), f"R2 vs k: {target_name} (V4)", "r2_vs_k_v4.png")
     
     return model
 
@@ -159,15 +200,11 @@ def main():
         print(f"Error: No data found in {DATA_DIR}. Please run the generator first.")
         return
     
-    # 1. Load and Enrich Data
-    X, y_mu = load_all_data()
-    print(f"\nDataset loaded. Total sensor-samples: {X.shape[0]}")
-    print(f"Enriched feature vector size: {X.shape[1]}")
+    X_grouped, y_mu, k_vals = load_all_data()
+    print(f"\nDataset loaded. Total examples: {X_grouped.shape[0]}")
+    print(f"Enriched feature vector size: {X_grouped.shape[-1]}")
     
-    # 2. Train Model for Viscosity (log-space)
-    model_mu = train_and_evaluate(X, y_mu, "Log-Viscosity (log10(mu))")
-    
-    # Save the best model for ensemble use
+    model_mu = train_and_evaluate(X_grouped, y_mu, k_vals, "Log-Viscosity (log10(mu))")
     model_mu.save_model("best_model_v4.pth")
     print("Model saved to best_model_v4.pth")
     

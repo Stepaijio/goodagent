@@ -10,13 +10,14 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
+from src.ml.plotting_utils import plot_scatter, plot_residuals, plot_r2_vs_k
 
 # Configuration
 DATA_DIR = "C:/Users/UserSK/Desktop/goodagent/data"
 SHARD_PREFIX = "data_shard"
 BATCH_SIZE = 64
 LEARNING_RATE = 1e-3
-EPOCHS = 30
+EPOCHS = 50
 TRAIN_SPLIT = 0.8
 VAL_SPLIT = 0.1
 TEST_SPLIT = 0.1
@@ -96,7 +97,7 @@ class Variant2Model(nn.Module):
             nn.Linear(64, 1) # Predicts log10(mu)
         )
 
-    def forward(self, rho, sigma, k, x, h):
+    def forward(self, rho, sigma, k, x, h, k_eval=None):
         batch_size = h.shape[0]
         k_max = h.shape[1]
         
@@ -109,11 +110,19 @@ class Variant2Model(nn.Module):
         encoded_features = encoded_features.view(batch_size, k_max, -1)
         
         # 3. Mean Pooling across active sensors only
-        mask = torch.arange(k_max).to(DEVICE).unsqueeze(0) < k.unsqueeze(1)
+        # If k_eval is provided, we limit the sensors to min(k_actual, k_eval)
+        if k_eval is not None:
+            # k_eval is a scalar or a tensor of same shape as k
+            limit = torch.min(k, torch.tensor(k_eval).to(DEVICE))
+        else:
+            limit = k
+            
+        mask = torch.arange(k_max).to(DEVICE).unsqueeze(0) < limit.unsqueeze(1)
         mask = mask.unsqueeze(-1).float() # [batch, k_max, 1]
         
         sum_features = torch.sum(encoded_features * mask, dim=1) # [batch, 64]
-        global_features = sum_features / k.unsqueeze(-1).float() # [batch, 64]
+        # Avoid division by zero: use max(limit, 1)
+        global_features = sum_features / torch.clamp(limit, min=1).unsqueeze(-1).float() # [batch, 64]
         
         # 4. Add global constants [rho, sigma]
         constants = torch.stack([rho, sigma], dim=-1) # [batch, 2]
@@ -220,20 +229,22 @@ def main():
             torch.save(model.state_dict(), "best_model_v2.pth")
             
     plt.figure(figsize=(10, 6))
-    plt.plot(train_losses, label='Train Loss')
-    plt.plot(val_losses, label='Val Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss (MSE)')
-    plt.title('Training and Validation Loss')
+    plt.plot(train_losses, label='Потери при тренировке')
+    plt.plot(val_losses, label='Потери при валидации')
+    plt.xlabel('Эпоха')
+    plt.ylabel('Потери (MSE)')
+    #plt.title('Training and Validation Loss')
     plt.legend()
     plt.grid(True)
     plt.savefig('loss_curve.png')
     print("\nLoss curve saved as loss_curve.png")
             
+    # Evaluation and Plotting
     model.load_state_dict(torch.load("best_model_v2.pth", weights_only=True))
     model.eval()
     all_preds = []
     all_targets = []
+    all_k = []
     
     with torch.no_grad():
         for batch in test_loader:
@@ -247,9 +258,11 @@ def main():
             preds = model(rho, sigma, k, x, h)
             all_preds.append(preds.cpu().numpy().flatten())
             all_targets.append(y.cpu().numpy().flatten())
+            all_k.append(k.cpu().numpy())
             
     all_preds = np.concatenate(all_preds)
     all_targets = np.concatenate(all_targets)
+    all_k = np.concatenate(all_k)
     
     mae = mean_absolute_error(all_targets, all_preds)
     r2 = r2_score(all_targets, all_preds)
@@ -260,6 +273,35 @@ def main():
     print(f"  - MAE: {mae:.6f}")
     print(f"  - R2 Score: {r2:.4f}")
     print("="*40)
+    
+    plot_scatter(all_targets, all_preds, "Scatter Plot: Variant 2", "scatter_v2.png")
+    plot_residuals(all_targets, all_preds, "Residuals: Variant 2", "residuals_v2.png")
+    
+    # Actual R2 vs k calculation
+    k_range = np.arange(1, 11)
+    r2_vs_k = []
+    
+    with torch.no_grad():
+        for k_eval in k_range:
+            temp_preds = []
+            temp_targets = []
+            for batch in test_loader:
+                rho = batch['rho'].to(DEVICE)
+                sigma = batch['sigma'].to(DEVICE)
+                k = batch['k'].to(DEVICE)
+                x = batch['x'].to(DEVICE)
+                h = batch['h'].to(DEVICE)
+                y = batch['y'].to(DEVICE)
+                
+                # Pass ACTUAL k and k_eval for correct masking
+                p = model(rho, sigma, k, x, h, k_eval=k_eval)
+                temp_preds.append(p.cpu().numpy().flatten())
+                temp_targets.append(y.cpu().numpy().flatten())
+            
+            r2_val = r2_score(np.concatenate(temp_targets), np.concatenate(temp_preds))
+            r2_vs_k.append(r2_val)
+            
+    plot_r2_vs_k(k_range, np.array(r2_vs_k), "R2 vs k: Variant 2", "r2_vs_k_v2.png")
 
 if __name__ == "__main__":
     main()
