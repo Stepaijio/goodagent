@@ -7,11 +7,13 @@
 Ниже представлена визуализация архитектуры:
 
 ```mermaid
-graph LR
-    Input[Входные данные:<br/>Временные ряды] --> CNN[1D-CNN Encoder]
+graph TD
+    %% Входные данные
+    Input[Входные данные:<br/>Временные ряды] --> CNN
     Global[Входные данные:<br/>Плотность, Поверхностное натяжение] --> Concat
 
     subgraph CNN [1D-CNN Encoder]
+        direction TB
         C1[Conv1d: 1->16<br/>ReLU<br/>MaxPool1d]
         C2[Conv1d: 16->32<br/>ReLU<br/>MaxPool1d]
         C3[Conv1d: 32->64<br/>ReLU<br/>AdaptiveAvgPool1d]
@@ -22,6 +24,7 @@ graph LR
     Pool --> Concat[Concatenation]
     
     subgraph MLP [MLP: 66 -> 128 -> 64 -> 1]
+        direction TB
         L1[Linear: 66->128<br/>ReLU<br/>Dropout]
         L2[Linear: 128->64<br/>ReLU]
         L3[Linear: 64->1]
