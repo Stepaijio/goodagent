@@ -34,17 +34,21 @@ graph TD
     Concat --> L1
     L3 --> Output[Выходной слой:<br/>Вязкость]
 
-    %% Стилизация
+    %% Стилизация всех блоков в белый цвет
+    style Backbone fill:#fff,stroke:#333
     style CNN fill:#fff,stroke:#333
     style MLP fill:#fff,stroke:#333
-    style Input fill:#f9f9f9,stroke:#333
-    style Global fill:#f9f9f9,stroke:#333
-    style Output fill:#f9f9f9,stroke:#333
-    style C1 fill:#f9f9f9,stroke:#333
-    style C2 fill:#f9f9f9,stroke:#333
-    style C3 fill:#f9f9f9,stroke:#333
-    style Pool fill:#f9f9f9,stroke:#333
-    style MLP fill:#f9f9f9,stroke:#333
+    style Input fill:#fff,stroke:#333
+    style Global fill:#fff,stroke:#333
+    style Output fill:#fff,stroke:#333
+    style C1 fill:#fff,stroke:#333
+    style C2 fill:#fff,stroke:#333
+    style C3 fill:#fff,stroke:#333
+    style Pool fill:#fff,stroke:#333
+    style Concat fill:#fff,stroke:#333
+    style L1 fill:#fff,stroke:#333
+    style L2 fill:#fff,stroke:#333
+    style L3 fill:#fff,stroke:#333
 ```
 
 - **1D-CNN Encoder**: Извлекает локальные признаки формы волны из временного ряда каждого датчика. Состоит из трех сверточных блоков с ReLU-активацией и пулингом.
@@ -78,4 +82,4 @@ graph TD
 
 ---
 11.05.2026 MSK | gemma-4-31b-it
-Обновление результатов и уточнение архитектурной схемы.
+Обновление результатов и визуализация архитектуры.
