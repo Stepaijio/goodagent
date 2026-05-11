@@ -6,21 +6,25 @@
 
 Вариант 3 представляет собой иерархическую систему, где каждый уровень отвечает за свой тип признаков.
 
-### Уровень 1: Temporal Encoder (Временные признаки)
-Используется **1D-CNN**.
-- **Цель**: Извлечь локальные признаки формы волны (амплитуда, частота, фазовые сдвиги внутри одного ряда).
-- **Реализация**: Сверточные слои $\rightarrow$ ReLU $\rightarrow$ AdaptiveAvgPool1d.
-- **Результат**: Вектор признаков $v_i$ для каждого датчика.
+```mermaid
+graph LR
+    Input[Входные данные:<br/>rho, sigma, readings] --> Temp[Temporal Encoder:<br/>1D-CNN]
+    Temp --> Feature[Векторы признаков v_i]
+    Feature --> Spatial[Spatial Encoder:<br/>Transformer Attention]
+    Spatial --> Pool[Masked Mean Pooling]
+    Pool --> MLP[MLP Regressor]
+    MLP --> Output[Выходной слой:<br/>Log10 Viscosity]
 
-### Уровень 2: Spatial Encoder (Пространственные признаки)
-Используется механизм **Spatial Attention** (Transformer Encoder).
-- **Цель**: Проанализировать взаимосвязь между датчиками, учитывая их координаты $x_i$.
-- **Реализация**: Конкатенация $[v_i, x_i] \rightarrow$ Transformer Encoder $\rightarrow$ Masked Mean Pooling.
-- **Результат**: Глобальный вектор состояния системы $V_{global}$.
+    %% Стилизация
+    style Temp fill:#f9f9f9,stroke:#333
+    style Spatial fill:#f9f9f9,stroke:#333
+    style Pool fill:#f9f9f9,stroke:#333
+    style MLP fill:#f9f9f9,stroke:#333
+```
 
-### Уровень 3: Предиктор
-- **Реализация**: Компактный MLP, принимающий $[V_{global}, \rho_{norm}, \sigma_{norm}]$.
-- **Выход**: Предсказание $\log_{10}(\mu)$.
+- **Уровень 1: Temporal Encoder (1D-CNN)**: Извлекает локальные признаки формы волны из каждого датчика.
+- **Уровень 2: Spatial Encoder (Transformer)**: Анализирует взаимосвязи и фазовые сдвиги между датчиками.
+- **Уровень 3: Предиктор (MLP)**: Объединяет глобальный вектор признаков с константами ($\rho, \sigma$) для предсказания $\log_{10}(\mu)$.
 
 ---
 
