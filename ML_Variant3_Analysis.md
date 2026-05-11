@@ -4,35 +4,61 @@
 
 ## 1. Архитектура модели
 
+Ниже представлена визуализация архитектуры:
+
 ```mermaid
-graph LR
-    Input[Входные данные:<br/>rho, sigma, readings] --> Temp[Temporal Encoder:<br/>1D-CNN]
-    
-    subgraph Temp [Temporal Encoder: 1D-CNN]
-        C1[Conv1d: 1->16<br/>MaxPool1d]
-        C2[Conv1d: 16->32<br/>AdaptiveAvgPool1d]
+graph TD
+    %% Входные данные
+    Input[Входные данные:<br/>Временные ряды] --> CNN
+    Global[Входные данные:<br/>Плотность, Поверхностное натяжение] --> Concat
+
+    subgraph CNN [Temporal Encoder: 1D-CNN]
+        direction TB
+        C1[Conv1d: 1->16<br/>ReLU<br/>MaxPool1d]
+        C2[Conv1d: 16->32<br/>ReLU<br/>AdaptiveAvgPool1d]
         C1 --> C2
     end
+
+    CNN --> Spatial[Spatial Encoder:<br/>Transformer Attention]
+    Spatial --> Concat[Concatenation]
     
-    Temp --> Spatial[Spatial Encoder:<br/>Transformer Attention]
-    Spatial --> Pool[Masked Mean Pooling]
-    Pool --> MLP[MLP Regressor:<br/>64 -> 1]
-    MLP --> Output[Выходной слой:<br/>Log10 Viscosity]
+    subgraph MLP [MLP: 66 -> 128 -> 64 -> 1]
+        direction TB
+        L1[Linear: 66->128<br/>ReLU]
+        L2[Linear: 128->64<br/>ReLU]
+        L3[Linear: 64->1]
+        L1 --> L2 --> L3
+    end
+    
+    Concat --> L1
+    L3 --> Output[Выходной слой:<br/>Вязкость]
 
     %% Стилизация
-    style Temp fill:#fff,stroke:#333
+    style CNN fill:#fff,stroke:#333
     style Spatial fill:#fff,stroke:#333
-    style Pool fill:#fff,stroke:#333
     style MLP fill:#fff,stroke:#333
+    style Input fill:#fff,stroke:#333
+    style Global fill:#fff,stroke:#333
+    style Output fill:#fff,stroke:#333
+    style C1 fill:#fff,stroke:#333
+    style C2 fill:#fff,stroke:#333
+    style Pool fill:#fff,stroke:#333
+    style Concat fill:#fff,stroke:#333
+    style L1 fill:#fff,stroke:#333
+    style L2 fill:#fff,stroke:#333
+    style L3 fill:#fff,stroke:#333
 ```
 
 - **Temporal Encoder (1D-CNN)**: Извлекает локальные признаки каждого сигнала (амплитуда, частота). Состоит из сверточных слоев и пулинга.
 - **Spatial Encoder (Transformer)**: Анализирует взаимосвязи (корреляции, фазовые сдвиги) между всеми датчиками системы.
-- **MLP (Предиктор)**: Полносвязная сеть, объединяющая глобальный вектор признаков с константами $(\rho, \sigma)$ для финального предсказания вязкости $\mu$.
+- **Concatenation**: Объединение вектора признаков с глобальными константами $(\rho, \sigma)$.
+- **MLP (Предиктор)**: Полносвязная сеть, выполняющая финальное преобразование признаков в предсказание вязкости $\mu$.
 
 ---
 
 ## 2. Результаты и анализ
+
+Модель Варианта 3 показала наилучшие результаты среди всех архитектур проекта.
 
 | Метрика | Значение |
 | :--- | :---: |
