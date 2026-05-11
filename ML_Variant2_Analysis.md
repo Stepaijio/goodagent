@@ -8,38 +8,33 @@
 
 ```mermaid
 graph LR
-    Input[Входные данные:<br/>rho, sigma, readings] --> Backbone
-
-    subgraph Backbone [Backbone: 1D-CNN]
-        direction TB
-        C1[Conv1d layer<br/>ReLU activation<br/>MaxPool1d]
-        C2[Conv1d layer<br/>ReLU activation<br/>AdaptiveAvgPool1d]
+    Input[Входные данные:<br/>rho, sigma, readings] --> CNN[1D-CNN Encoder]
+    
+    subgraph CNN [1D-CNN Encoder]
+        C1[Conv1d: 1->16<br/>ReLU<br/>MaxPool1d]
+        C2[Conv1d: 16->32<br/>ReLU<br/>AdaptiveAvgPool1d]
         C1 --> C2
     end
 
-    Backbone --> Pool[Mean Pooling<br/>агрегация по датчикам]
-    Pool --> MLP[MLP слои<br/>Linear + ReLU]
+    CNN --> Pool[Mean Pooling<br/>агрегация по датчикам]
+    Pool --> MLP[MLP: 64 -> 1]
     MLP --> Output[Выходной слой:<br/>Log10 Viscosity]
 
     %% Стилизация
-    style Backbone stroke-dasharray: 5 5
-    style Input fill:#fff,stroke:#333
-    style Output fill:#fff,stroke:#333
+    style CNN fill:#fff,stroke:#333
+    style Input fill:#f9f9f9,stroke:#333
+    style Output fill:#f9f9f9,stroke:#333
     style C1 fill:#f9f9f9,stroke:#333
     style C2 fill:#f9f9f9,stroke:#333
     style Pool fill:#f9f9f9,stroke:#333
     style MLP fill:#f9f9f9,stroke:#333
 ```
 
-- **Энкодер (1D-CNN)**: 
-    - Три слоя сверток с ReLU.
-    - Использование MaxPool1d для снижения размерности.
-    - AdaptiveAvgPool1d на выходе для получения фиксированного вектора признаков $v_i$ для каждого датчика.
-- **Агрегация (Fusion)**: 
-    - **Mean Pooling**: Усреднение векторов всех активных датчиков.
-- **Предиктор (MLP)**:
-    - Полносвязная сеть, принимающая $[V_{global}, \rho_{norm}, \sigma_{norm}]$.
-    - Выход: одно значение $\log_{10}(\mu)$.
+- **1D-CNN Encoder**: Извлекает локальные признаки формы волны из временного ряда каждого датчика. Состоит из двух сверточных блоков с ReLU-активацией и пулингом.
+- **Mean Pooling**: Вычисляет средний вектор признаков по всем активным датчикам ($V_{global}$).
+- **MLP (Предиктор)**: Полносвязная сеть из слоев $[64 \to 1]$, принимающая конкатенированный вектор $[V_{global}, \rho, \sigma]$.
+
+---
 
 ## 2. Результаты обучения и тестирования
 
@@ -65,4 +60,4 @@ graph LR
 
 ---
 11.05.2026 MSK | gemma-4-31b-it
-Обновление результатов и визуализация архитектуры.
+Обновление результатов и детализация архитектуры.
