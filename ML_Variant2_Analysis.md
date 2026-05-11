@@ -35,7 +35,6 @@ graph TD
     L3 --> Output[Выходной слой:<br/>Вязкость]
 
     %% Стилизация всех блоков в белый цвет
-    style Backbone fill:#fff,stroke:#333
     style CNN fill:#fff,stroke:#333
     style MLP fill:#fff,stroke:#333
     style Input fill:#fff,stroke:#333
