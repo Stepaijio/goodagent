@@ -22,18 +22,17 @@ graph TD
     CNN --> Spatial[Spatial Encoder:<br/>Transformer Attention]
     Spatial --> Concat[Concatenation]
     
-    subgraph MLP [MLP: 66 -> 128 -> 64 -> 1]
+    subgraph MLP [MLP: 34 -> 64 -> 1]
         direction TB
-        L1[Linear: 66->128<br/>ReLU]
-        L2[Linear: 128->64<br/>ReLU]
-        L3[Linear: 64->1]
-        L1 --> L2 --> L3
+        L1[Linear: 34->64<br/>ReLU]
+        L2[Linear: 64->1]
+        L1 --> L2
     end
     
     Concat --> L1
-    L3 --> Output[Выходной слой:<br/>Вязкость]
+    L2 --> Output[Выходной слой:<br/>Вязкость]
 
-    %% Стилизация
+    %% Стилизация всех блоков в белый цвет
     style CNN fill:#fff,stroke:#333
     style Spatial fill:#fff,stroke:#333
     style MLP fill:#fff,stroke:#333
@@ -42,11 +41,9 @@ graph TD
     style Output fill:#fff,stroke:#333
     style C1 fill:#fff,stroke:#333
     style C2 fill:#fff,stroke:#333
-    style Pool fill:#fff,stroke:#333
     style Concat fill:#fff,stroke:#333
     style L1 fill:#fff,stroke:#333
     style L2 fill:#fff,stroke:#333
-    style L3 fill:#fff,stroke:#333
 ```
 
 - **Temporal Encoder (1D-CNN)**: Извлекает локальные признаки каждого сигнала (амплитуда, частота). Состоит из сверточных слоев и пулинга.
@@ -76,4 +73,4 @@ graph TD
 
 ---
 11.05.2026 MSK | gemma-4-31b-it
-Обновление результатов и визуализация архитектуры. Модель признана лучшей в проекте.
+Обновление результатов и уточнение архитектурной схемы. Модель признана лучшей в проекте.
