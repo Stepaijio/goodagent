@@ -49,16 +49,32 @@ $$Re = \frac{\rho v h_0}{\mu}$$
 
 ```mermaid
 graph TD
-    Loop[Цикл по времени: для каждого шага dt] --> Deriv[Расчет потока q и его градиента]
-    Deriv --> Update[Обновление толщины h:<br/>h = h - dt * grad(q)]
-    Update --> Constraints[Применение граничных условий<br/>и ограничений на h]
-    Constraints --> Loop
-
+    %% Входные данные
+    Input["Входные данные:<br/>Временные ряды"] --> Loop
+    
+    subgraph Sim ["Цикл симуляции"]
+        direction TB
+        Loop["Цикл по времени: для каждого шага dt"]
+        Deriv["Расчет потока q и его градиента"]
+        Update["Обновление толщины h:<br/>h = h - dt * grad(q)"]
+        Constraints["Применение граничных условий<br/>и ограничений на h"]
+        
+        Loop --> Deriv
+        Deriv --> Update
+        Update --> Constraints
+        Constraints --> Loop
+    end
+    
+    Constraints --> Output["Выход: Новое состояние h"]
+    
     %% Стилизация всех блоков в белый цвет
+    style Sim fill:#fff,stroke:#333
     style Loop fill:#fff,stroke:#333
     style Deriv fill:#fff,stroke:#333
     style Update fill:#fff,stroke:#333
     style Constraints fill:#fff,stroke:#333
+    style Input fill:#fff,stroke:#333
+    style Output fill:#fff,stroke:#333
 ```
 
 1. **Инициализация**: Задается начальный профиль толщины $h(x, 0) = h_0 + \text{random}(-\delta, \delta)$.
@@ -81,4 +97,4 @@ graph TD
 
 ---
 11.05.2026 MSK | gemma-4-31b-it
-Обновлена схема алгоритма: добавлен внешний цикл по времени, уточнена терминология в блоках.
+Обновлена схема алгоритма: добавлена корректная экранировка спецсимволов для визуализации.
